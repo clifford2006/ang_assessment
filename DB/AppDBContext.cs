@@ -7,6 +7,7 @@ namespace ANG_Assessment.DB
     public class AppDBContext(DbContextOptions<AppDBContext> options) : DbContext(options)
     {
         public DbSet<WeatherRecord> WeatherRecords { get; set; }
+        public DbSet<AlertSubscribe> AlertSubscribes { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -10,6 +11,21 @@ namespace ANG_Assessment.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.CreateTable(
+                name: "AlertSubscribes",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    SubscribeEmail = table.Column<string>(type: "TEXT", nullable: false),
+                    Location = table.Column<string>(type: "TEXT", nullable: false),
+                    SubscribeDate = table.Column<DateTime>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AlertSubscribes", x => x.Id);
+                });
+
             migrationBuilder.CreateTable(
                 name: "WeatherRecords",
                 columns: table => new
@@ -37,6 +53,9 @@ namespace ANG_Assessment.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "AlertSubscribes");
+
             migrationBuilder.DropTable(
                 name: "WeatherRecords");
         }

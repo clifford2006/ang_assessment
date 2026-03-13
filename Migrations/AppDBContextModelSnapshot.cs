@@ -17,6 +17,28 @@ namespace ANG_Assessment.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.14");
 
+            modelBuilder.Entity("ANG_Assessment.DB.Models.AlertSubscribe", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Location")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("SubscribeDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SubscribeEmail")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AlertSubscribes");
+                });
+
             modelBuilder.Entity("ANG_Assessment.DB.Models.WeatherRecord", b =>
                 {
                     b.Property<int>("Id")

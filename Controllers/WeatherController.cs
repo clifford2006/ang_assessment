@@ -3,7 +3,9 @@ using ANG_Assessment.DB.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
+using System.Text;
 
 namespace ANG_Assessment.Controllers
 {
@@ -14,7 +16,7 @@ namespace ANG_Assessment.Controllers
         private readonly ILogger<WeatherController> _logger = logger;
         private readonly IServiceProvider _serviceProvider = serviceProvider;
 
-        [HttpGet("forecast/{location}")]
+        [HttpGet("retrieve/{location}")]
         public async Task<ActionResult<WeatherRecord>> GetWeatherAsync([FromRoute, DefaultValue("Singapore")] string location, [FromQuery] string? date)
         {
             DateTime queryDate;
@@ -44,6 +46,113 @@ namespace ANG_Assessment.Controllers
             {
                 return NotFound($"No data found for {queryDate:yyyy-MM-dd} in {location}");
             }
+        }
+
+        [HttpGet("export/{location}")]
+        public async Task<IActionResult> ExportCsv([FromRoute, DefaultValue("Singapore")] string location, [FromQuery] string from, [FromQuery] string to)
+        {
+            if (!DateTime.TryParseExact(from, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime queryFromDate))
+            {
+                return BadRequest("Invalid date format. Use yyyy-MM-dd.");
+            }
+            if (!DateTime.TryParseExact(to, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime queryToDate))
+            {
+                return BadRequest("Invalid date format. Use yyyy-MM-dd.");
+            }
+
+            using var scope = _serviceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDBContext>();
+
+            var records = await db.WeatherRecords
+                .Where(x => x.Location == location && x.RecordDate.Date >= queryFromDate.Date && x.RecordDate.Date <= queryToDate.Date)
+                .OrderBy(x => x.RecordDate)
+                .ToListAsync();
+
+            if (records.Count > 0)
+            {
+                var csv = new StringBuilder();
+
+                csv.AppendLine("Location,Date,Weather Desc,Temp Low,Temp High,Humidity Low,Humidity High,Wind Low,Wind High,Wind Direction");
+                foreach (var r in records)
+                {
+                    csv.AppendLine($"{r.Location},{r.RecordDate:yyyy-MM-dd},{r.WeatherDesc},{r.TemperatureLow},{r.TemperatureHigh},{r.HumidityLow},{r.HumidityHigh},{r.WindSpeedLow},{r.WindSpeedHigh},{r.WindDirection}");
+                }
+
+                var bytes = Encoding.UTF8.GetBytes(csv.ToString());
+
+                return File(bytes, "text/csv", $"Weather_{location}.csv");
+            }
+            else
+            {
+                return NotFound($"No data found between {from:yyyy-MM-dd} and {to:yyyy-MM-dd} in {location}");
+            }
+        }
+
+        [HttpGet("subscribe/{location}")]
+        public async Task<IActionResult> Subscribe([FromRoute, DefaultValue("Singapore")] string location, [FromQuery] string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return BadRequest("Email is required.");
+            }
+            var emailValidator = new EmailAddressAttribute();
+            if (!emailValidator.IsValid(email))
+            {
+                return BadRequest("Invalid email format.");
+            }
+
+            using var scope = _serviceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDBContext>();
+
+            var existing = await db.Set<AlertSubscribe>()
+                .FirstOrDefaultAsync(x => x.SubscribeEmail == email && x.Location == location);
+
+            if (existing != null)
+            {
+                return Conflict("Subscription already exists.");
+            }
+
+            var subscribe = new AlertSubscribe
+            {
+                SubscribeEmail = email,
+                Location = location,
+                SubscribeDate = DateTime.UtcNow
+            };
+
+            await db.AddAsync(subscribe);
+            await db.SaveChangesAsync();
+
+            return Ok($"Subscribed {email} to {location} successfully.");
+        }
+
+        [HttpGet("unsubscribe/{location}")]
+        public async Task<IActionResult> Unsubscribe([FromRoute, DefaultValue("Singapore")] string location, [FromQuery] string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+            {
+                return BadRequest("Email is required.");
+            }
+            var emailValidator = new EmailAddressAttribute();
+            if (!emailValidator.IsValid(email))
+            {
+                return BadRequest("Invalid email format.");
+            }
+
+            using var scope = _serviceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDBContext>();
+
+            var existing = await db.Set<AlertSubscribe>()
+                .FirstOrDefaultAsync(x => x.SubscribeEmail == email && x.Location == location);
+
+            if (existing == null)
+            {
+                return NotFound("Subscription not found.");
+            }
+
+            db.Remove(existing);
+            await db.SaveChangesAsync();
+
+            return Ok($"Unsubscribed {email} from {location} successfully.");
         }
     }
 }

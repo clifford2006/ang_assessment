@@ -12,7 +12,7 @@ namespace ANG_AssessmentTest
         [Fact]
         public void DBMigrationTest()
         {
-            var connection = new SqliteConnection("DataSource=:memory:");
+            using var connection = new SqliteConnection("DataSource=:memory:");
             connection.Open();
 
             var options = new DbContextOptionsBuilder<AppDBContext>()
