@@ -1,362 +1,181 @@
-# \# Challenge 1: Weather Microservice Design
+# Challenge 1: Weather Microservice Design
 
-# 
+## 1. Executive Summary
 
-# \## 1. Executive Summary
+The Weather microservice provides RESTful APIs to retrieve, store, and export weather information.
 
-# 
+## 2. Assumptions
+ 
+- Weather data is fetched periodically from https://data.gov.sg/ and cached locally to reduce redundant requests.
+- Data is stored in a **relational database (SQLite)** for query and export purposes. SQLite was chosen because it does not rely on an external database installation. It is an embedded database that runs directly within the application, storing data in a single local file. This eliminates the need to install, configure, or manage a separate database server, simplifying deployment and reducing operational overhead for demo purpose.
+- Alerts are based on threshold events (e.g., temperature exceed certain limit) and can be subscribed to by users via email.
+- The service will be secured using **JWT authentication** and protected endpoints where necessary.
+- CI pipelines is implemented for **GitHub Action** will handle build, test. CD pipeline is not included in this demo.
 
-# The Weather microservice provides RESTful APIs to retrieve, store, and export weather information.
+## 3. How To
 
-# 
+Project files can be checked out from github and build with Visual Studio and run via the Visual Studio.
 
-# \## 2. Assumptions
+---
 
-# &#x20;
+# Challenge 2: Solution Design Document: BFF for Multi-Service Platform
 
-# \- Weather data is fetched periodically from https://data.gov.sg/ and cached locally to reduce redundant requests.
+## 1. Executive Summary
 
-# \- Data is stored in a \*\*relational database (SQLite)\*\* for query and export purposes. SQLite was chosen because it does not rely on an external database installation. It is an embedded database that runs directly within the application, storing data in a single local file. This eliminates the need to install, configure, or manage a separate database server, simplifying deployment and reducing operational overhead for demo purpose.
+This platform consists of **Quotation** and **Payment** microservices supporting two frontends: **Customer Portal** and **Agent Portal**. A **Backend-for-Frontend (BFF)** layer is implemented to:
 
-# \- Alerts are based on threshold events (e.g., temperature exceed certain limit) and can be subscribed to by users via email.
+- Aggregate and tailor microservice data for each portal.
+- Orchestrate workflows such as quotation retrieval, validation, and payment initiation.
+- Ensure **data consistency, integrity, and PII compliance** while enforcing robust authentication and authorization.
 
-# \- The service will be secured using \*\*JWT authentication\*\* and protected endpoints where necessary.
+The BFF layer enables portal-specific business logic without modifying the core microservices, improving **security, maintainability, and performance**.
 
-# \- CI pipelines is implemented for \*\*GitHub Action\*\* will handle build, test. CD pipeline is not included in this demo.
+---
 
-# 
+## 2. Architecture Overview
 
-# \## 3. How To
+The **BFF layer** acts as middleware between the frontends and backend services:
 
-# 
+- **Customer BFF:** Aggregates and tailors quotation and payment data for end-users, orchestrating direct policy purchases.
+- **Agent BFF:** Aggregates quotations and payment data for agents, ensuring all actions are executed **on behalf of specific customers**.
+- **Customer Service:** Handles customer lookups and context required for agent-initiated transactions.
+- **Quotation Service:** Single service generating quotations, with responses tailored by the BFF according to portal type.
+- **Payment Service:** Handles policy payments, integrates with an external **Payment Gateway**, and stores transaction information.
+- **Database:** Shared storage for quotations, payments, and customer context.
+- **Payment Gateway:** External system to process real-world payment transactions.
 
-# Project files can be checked out from github and build with Visual Studio and run via the Visual Studio.
+### Architecture Diagram
 
-# 
+```mermaid
+flowchart TD
+    %% Portals to BFFs
+    AP[Agent Portal] --> ABFF[Agent BFF]
+    CP[Customer Portal] --> CBFF[Customer BFF]
 
-# \---
+    %% Agent specifies customer context
+    ABFF --> CUS[Customer Service]
 
-# 
+    %% BFFs to Services
+    CBFF --> QS[Quotation Service]
+    ABFF --> QS
+    CBFF --> PS[Payment Service]
+    ABFF --> PS
 
-# \# Challenge 2: Solution Design Document: BFF for Multi-Service Platform
+    %% Services to Database / Gateway
+    CUS --> DB[Database]
+    PS --> DB
+    QS --> DB
+    PS --> PG[Payment Gateway]
+```
 
-# 
+---
 
-# \## 1. Executive Summary
+## 3. Assumptions and Possible Endpoints
 
-# 
+### 3.1 Quotation Service
 
-# This platform consists of \*\*Quotation\*\* and \*\*Payment\*\* microservices supporting two frontends: \*\*Customer Portal\*\* and \*\*Agent Portal\*\*. A \*\*Backend-for-Frontend (BFF)\*\* layer is implemented to:
+| Endpoint              | Method | Purpose                                                  |
+|-----------------------|--------|----------------------------------------------------------|
+| `/quotes`             | POST   | Create a new quotation (requires customer info, policy type). |
+| `/quotes/{id}`        | GET    | Retrieve quotation details.                               |
+| `/quotes/{id}/validate` | POST | Validate a quotation before purchase.                   |
+| `/quotes/{id}/update` | PUT    | Update quotation (agent-only modifications).            |
 
-# 
+### 3.2 Payment Service
 
-# \- Aggregate and tailor microservice data for each portal.
+| Endpoint             | Method | Purpose                                              |
+|----------------------|--------|------------------------------------------------------|
+| `/payments`          | POST   | Initiate payment for a policy.                      |
+| `/payments/{id}`     | GET    | Retrieve payment status.                             |
+| `/payments/{id}/refund` | POST | Refund a payment (admin/agent only).               |
+| `/payments/{id}/result` | POST | payment completion result after gateway callback. |
 
-# \- Orchestrate workflows such as quotation retrieval, validation, and payment initiation.
+### 3.3 Customer Service
 
-# \- Ensure \*\*data consistency, integrity, and PII compliance\*\* while enforcing robust authentication and authorization.
+| Endpoint             | Method | Purpose                                           |
+|----------------------|--------|---------------------------------------------------|
+| `/customers/{id}`    | GET    | Retrieve customer info for agent context.        |
+| `/customers/search`  | GET    | Search for customers based on criteria (agent-only). |
 
-# 
+### 3.4 BFF Layer
 
-# The BFF layer enables portal-specific business logic without modifying the core microservices, improving \*\*security, maintainability, and performance\*\*.
+| Endpoint                  | Method | Portal   | Purpose                                                   |
+|----------------------------|--------|----------|-----------------------------------------------------------|
+| `/customer/quote`          | POST   | Customer | Create quotation and return tailored response.          |
+| `/customer/quote/{id}`     | GET    | Customer | Retrieve quotation.                                      |
+| `/customer/purchase/{id}`       | POST   | Customer | Initiate payment and purchase policy.                   |
+| `/agent/customer/{id}/quote`             | POST   | Agent    | Create quotation on behalf of customer.                 |
+| `/agent/customer/{id}/quote/{id}`        | GET    | Agent    | Retrieve quotation for customer.                         |
+| `/agent/customer/{id}/purchase/{id}`          | POST   | Agent    | Initiate payment and purchase policy for customer.      |
 
-# 
+---
 
-# \---
+## 4. Customer & Agent Portal Behavior
 
-# 
+- **Customer Portal:**  
+  - End-users create quotations and purchase policies directly through **Customer BFF**.  
+  - The BFF orchestrates calls to **Quotation Service** and **Payment Service**, returning tailored responses.  
 
-# \## 2. Architecture Overview
+- **Agent Portal:**  
+  - Agents must query a specific customer via **Customer Service** before creating quotations or initiating payments.  
+  - **Agent BFF** ensures all actions are executed on behalf of the selected customer and enforces agent-specific permissions.
 
-# 
+---
 
-# The \*\*BFF layer\*\* acts as middleware between the frontends and backend services:
+## 5. Data Consistency, Integrity & Security
 
-# 
+### 5.1 Data Consistency
 
-# \- \*\*Customer BFF:\*\* Aggregates and tailors quotation and payment data for end-users, orchestrating direct policy purchases.
+- **SAGA Pattern / Two-Phase Commit:** Ensures multi-service workflows (quotation + payment) remain consistent.  
+- **Event-Driven Updates:** Asynchronous updates maintain eventual consistency for non-critical operations.  
+- **Idempotent Operations:** Prevent duplicate quotations or payments if requests are retried.
 
-# \- \*\*Agent BFF:\*\* Aggregates quotations and payment data for agents, ensuring all actions are executed \*\*on behalf of specific customers\*\*.
+### 5.2 Data Security
 
-# \- \*\*Customer Service:\*\* Handles customer lookups and context required for agent-initiated transactions.
+- **Data in Transit:** TLS 1.2+ between portals, BFFs, microservices, and external gateways.  
+- **Data at Rest:** AES-256 encryption or higher for database.  
+- **PII Compliance:** Masking or tokenization of sensitive fields.
+- **Access Control:** Role-based access enforced at BFF and microservice layers.  
+- **Audit Logging:** Track all quotations and payments with correlation IDs for traceability.
 
-# \- \*\*Quotation Service:\*\* Single service generating quotations, with responses tailored by the BFF according to portal type.
+---
 
-# \- \*\*Payment Service:\*\* Handles policy payments, integrates with an external \*\*Payment Gateway\*\*, and stores transaction information.
+## 6. Observability Strategy
 
-# \- \*\*Database:\*\* Shared storage for quotations, payments, and customer context.
+| Aspect       | Implementation |
+|--------------|----------------|
+| **Metrics**  | Track latency, error rates, request counts |
+| **Logging**  | Centralized, structured logs with correlation IDs |
+| **Tracing**  | Distributed tracing across BFFs and microservices |
+| **Alerts**   | Threshold-based alerts for service errors, payment failures, high latency |
+| **Dashboards** | Real-time monitoring and troubleshooting |
 
-# \- \*\*Payment Gateway:\*\* External system to process real-world payment transactions.
+---
 
-# 
+## 7. Security & Best Practices
 
-# \### Architecture Diagram
+- **API Gateway / WAF:** Filters incoming requests before they reach BFF.  
+- **Mutual TLS:** Secures BFF → microservice communication.  
+- **JWT Authentication:** All API calls are protected with tokens.  
+- **Role-Based Access:** Ensures different privileges for Customer vs Agent portals.  
+- **Rate Limiting & Input Validation:** Prevents abuse and injection attacks.  
+- **Environment Separation:** Dev, staging, and production environments with isolated secrets.  
+- **Regular Penetration Testing:** Ensures compliance and security integrity.
 
-# 
+---
 
-# ```mermaid
+## 8. Deployment Strategy
 
-# flowchart TD
+- **Containerization:** Docker for BFFs and microservices.  
+- **Kubernetes:** Namespace isolation, Horizontal Pod Autoscaler for portal-specific scaling.  
+- **CI/CD Pipelines:** Automated build, test, and deployment.  
+- **Blue-Green / Canary Deployments:** Reduce risk during production updates.
 
-# &#x20;   %% Portals to BFFs
+---
 
-# &#x20;   AP\[Agent Portal] --> ABFF\[Agent BFF]
+## 9. Future Enhancements
 
-# &#x20;   CP\[Customer Portal] --> CBFF\[Customer BFF]
-
-# 
-
-# &#x20;   %% Agent specifies customer context
-
-# &#x20;   ABFF --> CUS\[Customer Service]
-
-# 
-
-# &#x20;   %% BFFs to Services
-
-# &#x20;   CBFF --> QS\[Quotation Service]
-
-# &#x20;   ABFF --> QS
-
-# &#x20;   CBFF --> PS\[Payment Service]
-
-# &#x20;   ABFF --> PS
-
-# 
-
-# &#x20;   %% Services to Database / Gateway
-
-# &#x20;   CUS --> DB\[Database]
-
-# &#x20;   PS --> DB
-
-# &#x20;   QS --> DB
-
-# &#x20;   PS --> PG\[Payment Gateway]
-
-# ```
-
-# 
-
-# \---
-
-# 
-
-# \## 3. Assumptions and Possible Endpoints
-
-# 
-
-# \### 3.1 Quotation Service
-
-# 
-
-# | Endpoint              | Method | Purpose                                                  |
-
-# |-----------------------|--------|----------------------------------------------------------|
-
-# | `/quotes`             | POST   | Create a new quotation (requires customer info, policy type). |
-
-# | `/quotes/{id}`        | GET    | Retrieve quotation details.                               |
-
-# | `/quotes/{id}/validate` | POST | Validate a quotation before purchase.                   |
-
-# | `/quotes/{id}/update` | PUT    | Update quotation (agent-only modifications).            |
-
-# 
-
-# \### 3.2 Payment Service
-
-# 
-
-# | Endpoint             | Method | Purpose                                              |
-
-# |----------------------|--------|------------------------------------------------------|
-
-# | `/payments`          | POST   | Initiate payment for a policy.                      |
-
-# | `/payments/{id}`     | GET    | Retrieve payment status.                             |
-
-# | `/payments/{id}/refund` | POST | Refund a payment (admin/agent only).               |
-
-# | `/payments/{id}/result` | POST | payment completion result after gateway callback. |
-
-# 
-
-# \### 3.3 Customer Service
-
-# 
-
-# | Endpoint             | Method | Purpose                                           |
-
-# |----------------------|--------|---------------------------------------------------|
-
-# | `/customers/{id}`    | GET    | Retrieve customer info for agent context.        |
-
-# | `/customers/search`  | GET    | Search for customers based on criteria (agent-only). |
-
-# 
-
-# \### 3.4 BFF Layer
-
-# 
-
-# | Endpoint                  | Method | Portal   | Purpose                                                   |
-
-# |----------------------------|--------|----------|-----------------------------------------------------------|
-
-# | `/customer/quote`          | POST   | Customer | Create quotation and return tailored response.          |
-
-# | `/customer/quote/{id}`     | GET    | Customer | Retrieve quotation.                                      |
-
-# | `/customer/purchase/{id}`       | POST   | Customer | Initiate payment and purchase policy.                   |
-
-# | `/agent/customer/{id}/quote`             | POST   | Agent    | Create quotation on behalf of customer.                 |
-
-# | `/agent/customer/{id}/quote/{id}`        | GET    | Agent    | Retrieve quotation for customer.                         |
-
-# | `/agent/customer/{id}/purchase/{id}`          | POST   | Agent    | Initiate payment and purchase policy for customer.      |
-
-# 
-
-# \---
-
-# 
-
-# \## 4. Customer \& Agent Portal Behavior
-
-# 
-
-# \- \*\*Customer Portal:\*\*  
-
-# &#x20; - End-users create quotations and purchase policies directly through \*\*Customer BFF\*\*.  
-
-# &#x20; - The BFF orchestrates calls to \*\*Quotation Service\*\* and \*\*Payment Service\*\*, returning tailored responses.  
-
-# 
-
-# \- \*\*Agent Portal:\*\*  
-
-# &#x20; - Agents must query a specific customer via \*\*Customer Service\*\* before creating quotations or initiating payments.  
-
-# &#x20; - \*\*Agent BFF\*\* ensures all actions are executed on behalf of the selected customer and enforces agent-specific permissions.
-
-# 
-
-# \---
-
-# 
-
-# \## 5. Data Consistency, Integrity \& Security
-
-# 
-
-# \### 5.1 Data Consistency
-
-# 
-
-# \- \*\*SAGA Pattern / Two-Phase Commit:\*\* Ensures multi-service workflows (quotation + payment) remain consistent.  
-
-# \- \*\*Event-Driven Updates:\*\* Asynchronous updates maintain eventual consistency for non-critical operations.  
-
-# \- \*\*Idempotent Operations:\*\* Prevent duplicate quotations or payments if requests are retried.
-
-# 
-
-# \### 5.2 Data Security
-
-# 
-
-# \- \*\*Data in Transit:\*\* TLS 1.2+ between portals, BFFs, microservices, and external gateways.  
-
-# \- \*\*Data at Rest:\*\* AES-256 encryption or higher for database.  
-
-# \- \*\*PII Compliance:\*\* Masking or tokenization of sensitive fields.
-
-# \- \*\*Access Control:\*\* Role-based access enforced at BFF and microservice layers.  
-
-# \- \*\*Audit Logging:\*\* Track all quotations and payments with correlation IDs for traceability.
-
-# 
-
-# \---
-
-# 
-
-# \## 6. Observability Strategy
-
-# 
-
-# | Aspect       | Implementation |
-
-# |--------------|----------------|
-
-# | \*\*Metrics\*\*  | Track latency, error rates, request counts |
-
-# | \*\*Logging\*\*  | Centralized, structured logs with correlation IDs |
-
-# | \*\*Tracing\*\*  | Distributed tracing across BFFs and microservices |
-
-# | \*\*Alerts\*\*   | Threshold-based alerts for service errors, payment failures, high latency |
-
-# | \*\*Dashboards\*\* | Real-time monitoring and troubleshooting |
-
-# 
-
-# \---
-
-# 
-
-# \## 7. Security \& Best Practices
-
-# 
-
-# \- \*\*API Gateway / WAF:\*\* Filters incoming requests before they reach BFF.  
-
-# \- \*\*Mutual TLS:\*\* Secures BFF → microservice communication.  
-
-# \- \*\*JWT Authentication:\*\* All API calls are protected with tokens.  
-
-# \- \*\*Role-Based Access:\*\* Ensures different privileges for Customer vs Agent portals.  
-
-# \- \*\*Rate Limiting \& Input Validation:\*\* Prevents abuse and injection attacks.  
-
-# \- \*\*Environment Separation:\*\* Dev, staging, and production environments with isolated secrets.  
-
-# \- \*\*Regular Penetration Testing:\*\* Ensures compliance and security integrity.
-
-# 
-
-# \---
-
-# 
-
-# \## 8. Deployment Strategy
-
-# 
-
-# \- \*\*Containerization:\*\* Docker for BFFs and microservices.  
-
-# \- \*\*Kubernetes:\*\* Namespace isolation, Horizontal Pod Autoscaler for portal-specific scaling.  
-
-# \- \*\*CI/CD Pipelines:\*\* Automated build, test, and deployment.  
-
-# \- \*\*Blue-Green / Canary Deployments:\*\* Reduce risk during production updates.
-
-# 
-
-# \---
-
-# 
-
-# \## 9. Future Enhancements
-
-# 
-
-# \- Introduce \*\*GraphQL\*\* in BFF for flexible portal queries.  
-
-# \- Implement \*\*caching\*\* for frequently requested quotations.  
-
-# \- Enable \*\*asynchronous processing\*\* for heavy operations or payment reconciliation.  
-
-# \- Extend observability with \*\*predictive monitoring and anomaly detection\*\*.
-
+- Introduce **GraphQL** in BFF for flexible portal queries.  
+- Implement **caching** for frequently requested quotations.  
+- Enable **asynchronous processing** for heavy operations or payment reconciliation.  
+- Extend observability with **predictive monitoring and anomaly detection**.
