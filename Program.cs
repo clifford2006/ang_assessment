@@ -12,6 +12,7 @@ namespace ANG_Assessment
             var builder = WebApplication.CreateBuilder(args);
 
             builder.Services.AddHttpClient();
+            builder.Services.AddScoped<DatabaseMigrationService>();
             builder.Services.AddSingleton<DataGovSGServices>();
             builder.Services.AddHostedService<WeatherUpdaterTask>();
 
@@ -30,21 +31,10 @@ namespace ANG_Assessment
 
             using (var scope = app.Services.CreateScope())
             {
-                var db = scope.ServiceProvider.GetRequiredService<AppDBContext>();
-
-                if (db.Database.HasPendingModelChanges())
+                var migrationService = scope.ServiceProvider.GetRequiredService<DatabaseMigrationService>();
+                if (!migrationService.EnsureDatabaseUpToDate())
                 {
-                    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-                    logger.LogCritical("EF Core model has pending changes!");
-
                     return;
-                }
-                else if (db.Database.GetPendingMigrations().Any())
-                {
-                    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-                    logger.LogInformation("Pending migrations found. Applying migrations...");
-                    db.Database.Migrate();
-                    logger.LogInformation("Migrations applied successfully.");
                 }
             }
 

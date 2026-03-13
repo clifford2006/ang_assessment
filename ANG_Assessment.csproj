@@ -7,6 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="ANG_AssessmentTest\**" />
+    <Content Remove="ANG_AssessmentTest\**" />
+    <EmbeddedResource Remove="ANG_AssessmentTest\**" />
+    <None Remove="ANG_AssessmentTest\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.14" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="9.0.14">
       <PrivateAssets>all</PrivateAssets>
