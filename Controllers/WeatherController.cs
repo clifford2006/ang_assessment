@@ -1,5 +1,6 @@
 using ANG_Assessment.DB;
 using ANG_Assessment.DB.Models;
+using ANG_Assessment.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel;
@@ -88,15 +89,15 @@ namespace ANG_Assessment.Controllers
             }
         }
 
-        [HttpGet("subscribe/{location}")]
-        public async Task<IActionResult> Subscribe([FromRoute, DefaultValue("Singapore")] string location, [FromQuery] string email)
+        [HttpPost("subscribe/{location}")]
+        public async Task<IActionResult> Subscribe([FromRoute, DefaultValue("Singapore")] string location, [FromBody] SubscribeRequest subscribeRequest)
         {
-            if (string.IsNullOrWhiteSpace(email))
+            if (string.IsNullOrWhiteSpace(subscribeRequest.Email))
             {
                 return BadRequest("Email is required.");
             }
             var emailValidator = new EmailAddressAttribute();
-            if (!emailValidator.IsValid(email))
+            if (!emailValidator.IsValid(subscribeRequest.Email))
             {
                 return BadRequest("Invalid email format.");
             }
@@ -105,7 +106,7 @@ namespace ANG_Assessment.Controllers
             var db = scope.ServiceProvider.GetRequiredService<AppDBContext>();
 
             var existing = await db.Set<AlertSubscribe>()
-                .FirstOrDefaultAsync(x => x.SubscribeEmail == email && x.Location == location);
+                .FirstOrDefaultAsync(x => x.SubscribeEmail == subscribeRequest.Email && x.Location == location);
 
             if (existing != null)
             {
@@ -114,7 +115,7 @@ namespace ANG_Assessment.Controllers
 
             var subscribe = new AlertSubscribe
             {
-                SubscribeEmail = email,
+                SubscribeEmail = subscribeRequest.Email,
                 Location = location,
                 SubscribeDate = DateTime.UtcNow
             };
@@ -122,18 +123,18 @@ namespace ANG_Assessment.Controllers
             await db.AddAsync(subscribe);
             await db.SaveChangesAsync();
 
-            return Ok($"Subscribed {email} to {location} successfully.");
+            return Ok($"Subscribed {subscribeRequest.Email} to {location} successfully.");
         }
 
-        [HttpGet("unsubscribe/{location}")]
-        public async Task<IActionResult> Unsubscribe([FromRoute, DefaultValue("Singapore")] string location, [FromQuery] string email)
+        [HttpPost("unsubscribe/{location}")]
+        public async Task<IActionResult> Unsubscribe([FromRoute, DefaultValue("Singapore")] string location, [FromBody] SubscribeRequest subscribeRequest)
         {
-            if (string.IsNullOrWhiteSpace(email))
+            if (string.IsNullOrWhiteSpace(subscribeRequest.Email))
             {
                 return BadRequest("Email is required.");
             }
             var emailValidator = new EmailAddressAttribute();
-            if (!emailValidator.IsValid(email))
+            if (!emailValidator.IsValid(subscribeRequest.Email))
             {
                 return BadRequest("Invalid email format.");
             }
@@ -142,7 +143,7 @@ namespace ANG_Assessment.Controllers
             var db = scope.ServiceProvider.GetRequiredService<AppDBContext>();
 
             var existing = await db.Set<AlertSubscribe>()
-                .FirstOrDefaultAsync(x => x.SubscribeEmail == email && x.Location == location);
+                .FirstOrDefaultAsync(x => x.SubscribeEmail == subscribeRequest.Email && x.Location == location);
 
             if (existing == null)
             {
@@ -152,7 +153,7 @@ namespace ANG_Assessment.Controllers
             db.Remove(existing);
             await db.SaveChangesAsync();
 
-            return Ok($"Unsubscribed {email} from {location} successfully.");
+            return Ok($"Unsubscribed {subscribeRequest.Email} from {location} successfully.");
         }
     }
 }
