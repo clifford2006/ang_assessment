@@ -4,6 +4,8 @@
 
 The Weather microservice provides RESTful APIs to retrieve, store, and export weather information.
 
+---
+
 ## 2. Assumptions
  
 - Weather data is fetched periodically from https://data.gov.sg/ and cached locally to reduce redundant requests.
@@ -11,6 +13,8 @@ The Weather microservice provides RESTful APIs to retrieve, store, and export we
 - Alerts are based on threshold events (e.g., temperature exceed certain limit) and can be subscribed to by users via email.
 - The service will be secured using **JWT authentication** and protected endpoints where necessary.
 - CI pipelines is implemented for **GitHub Action** will handle build, test. CD pipeline is not included in this demo.
+
+---
 
 ## 3. How To
 
